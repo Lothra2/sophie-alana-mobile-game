@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Helps with mobile responsiveness -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Las Aventuras Mágicas de Sophie y Alana (Móvil, HiDPI)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Body & background */
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, #ffeaf2 0%, #ffd6e1 100%) no-repeat center center fixed;
+      background-size: cover;
+      font-family: 'Comic Sans MS', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* We set a “logical” size in CSS, but use higher resolution in JS */
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      border: 3px solid #ff8ad8;
+      border-radius: 15px;
+      /* We'll give it a nice size on mobile, but it won't look blurry if devicePixelRatio > 1 */
+      width: 90vw;       
+      max-width: 700px;  
+      height: 45vh;      
+      max-height: 350px;
+      background: transparent;
+    }
+
+    /* Flip emojis horizontally */
+    .flip-emoji {
+      transform: scaleX(-1);
+      display: inline-block;
+    }
+
+    /* Rainbow title */
+    .rainbow-text {
+      background: linear-gradient(
+        90deg,
+        #ff8ad8,
+        #ffaaff,
+        #d4aaff,
+        #8fc3ff,
+        #85ffab,
+        #ffdf65,
+        #ff8ad8
+      );
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      font-weight: bold;
+      display: inline-block;
+    }
+
+    /* Buttons container */
+    #buttons {
+      text-align: center;
+      margin-top: 1rem;
+    }
+    /* Cool glow on hover */
+    #startButton:hover {
+      animation: buttonGlow 1s infinite alternate;
+    }
+    @keyframes buttonGlow {
+      from { box-shadow: 0 0 10px #ff6bf0; }
+      to   { box-shadow: 0 0 20px #ff6bf0; }
+    }
+
+    /* Smaller font for instructions */
+    #info-section {
+      margin: 0 auto;
+      max-width: 500px;
+      background: #ffebfa;
+      border: 2px solid #ff8ad8;
+      border-radius: 10px;
+      padding: 15px;
+      font-size: 14px;
+      color: #ff0080;
+      text-align: left;
+    }
+
+    .subtitle {
+      margin-top: 30px;
+    }
+
+    /* KPI board centered */
+    #kpiBoard {
+      text-align: center;
+      margin-top: 10px;
+    }
+    #kpiBoard p {
+      margin: 5px 0;
+      font-weight: bold;
+      color: #ff0080;
+    }
+
+    /* Confetti animation for fun */
+    .confetti {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      opacity: 0;
+      animation: confettiAnim 1s forwards;
+    }
+    @keyframes confettiAnim {
+      0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -150%) scale(2);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="text-center py-4">
+    <h1 class="text-3xl rainbow-text">Las Aventuras Mágicas de Sophie y Alana</h1>
+    <p class="text-base text-pink-700 subtitle">
+      ¡Ayuda al unicornio a recolectar zanahorias y a esquivar los obstáculos!
+    </p>
+    <div id="buttons">
+      <button id="startButton" class="mt-4 px-6 py-2 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-full">
+        ¡Iniciar Juego!
+      </button>
+      <button id="changeCharacterButton" class="mt-4 px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-full">
+        Cambiar Personaje
+      </button>
+      <button id="muteButton" class="mt-4 px-6 py-2 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-full">
+        Silencio / Sonido
+      </button>
+      <button id="fiestaButton" class="mt-4 px-6 py-2 bg-yellow-400 hover:bg-yellow-500 text-white font-bold rounded-full">
+        Fiesta Mode
+      </button>
+    </div>
+    <p id="score" class="mt-4 text-lg text-pink-800">Puntuación: 0</p>
+    <p id="levelDisplay" class="mt-2 text-lg text-pink-800">Nivel: 1</p>
+    <p id="highScore" class="mt-2 text-lg text-pink-800"></p>
+  </div>
+
+  <div id="kpiBoard">
+    <p id="timeElapsed">Tiempo: 0 s</p>
+    <p id="carrotCombo">Combo Zanahorias: 0</p>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="info-section" class="m-4">
+    <h2 class="text-xl font-bold">Instrucciones</h2>
+    <p>1. Presiona la flecha hacia arriba para saltar.</p>
+    <p>2. Recoge zanahorias para ganar puntos.</p>
+    <p>3. Evita los cactus, dragones y enemigos voladores (a menos que estés invencible).</p>
+    <p>4. Power-ups:</p>
+    <ul style="list-style: disc; margin-left: 20px;">
+      <li><strong>⭐ Estrella</strong> → Invencibilidad (5s)</li>
+      <li><strong>🐌 Caracol</strong> → Ralentiza el juego (8s)</li>
+      <li><strong>🔥 Llama</strong> → Doble de puntos (5s)</li>
+    </ul>
+    <p><em>¡Diviértete y compite por la mejor puntuación!</em></p>
+
+    <h2 class="text-xl font-bold mt-4">Leyenda / Power-Ups</h2>
+    <p><strong>Zanahoria (🥕):</strong> +10 puntos (cada 5ta seguida = +20)</p>
+    <p><strong>Estrella (⭐):</strong> Invencibilidad 5s</p>
+    <p><strong>Caracol (🐌):</strong> Ralentiza 8s</p>
+    <p><strong>Llama (🔥):</strong> Doble puntos 5s</p>
+  </div>
+
+  <div id="confetti" class="confetti">✨</div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // We'll set a higher internal resolution if devicePixelRatio > 1
+    function setupCanvas() {
+      // Desired “logical” size
+      const desiredWidth = 800;
+      const desiredHeight = 400;
+
+      // Factor in the device pixel ratio
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.width = desiredWidth * dpr;
+      canvas.height = desiredHeight * dpr;
+
+      // Then scale the context to match
+      ctx.scale(dpr, dpr);
+    }
+
+    // Call it right away so canvas is hi-res
+    setupCanvas();
+
+    const startButton = document.getElementById('startButton');
+    const changeCharacterButton = document.getElementById('changeCharacterButton');
+    const muteButton = document.getElementById('muteButton');
+    const fiestaButton = document.getElementById('fiestaButton');
+
+    const scoreDisplay = document.getElementById('score');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const highScoreDisplay = document.getElementById('highScore');
+
+    const timeElapsedDisplay = document.getElementById('timeElapsed');
+    const carrotComboDisplay = document.getElementById('carrotCombo');
+
+    const confettiElement = document.getElementById('confetti');
+
+    // Audio
+    const jumpSound = new Audio('https://actions.google.com/sounds/v1/cartoon/slide_whistle_to_drum_hit.ogg');
+    const carrotSound = new Audio('https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg');
+    const crashSound = new Audio('https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg');
+    const music = new Audio('https://actions.google.com/sounds/v1/ambiences/bell.ogg');
+    const starSound = new Audio('https://actions.google.com/sounds/v1/cartoon/metal_bell_ting.ogg');
+    const snailSound = new Audio('https://actions.google.com/sounds/v1/cartoon/woosh_fadeout.ogg');
+    const flameSound = new Audio('https://actions.google.com/sounds/v1/cartoon/descending_whistle.ogg');
+    music.loop = true;
+
+    let isMuted = false;
+    let gameRunning = false;
+
+    let savedData = localStorage.getItem('unicornHighScore');
+    let storedHighScore = 0;
+    let storedPlayerName = 'Player';
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        storedHighScore = parsed.score;
+        storedPlayerName = parsed.name;
+      } catch (e) {
+        storedHighScore = 0;
+        storedPlayerName = 'Player';
+      }
+    }
+    let highScore = storedHighScore;
+    let playerName = storedPlayerName;
+    if (highScore > 0) {
+      highScoreDisplay.textContent = `Máx. Puntaje (${playerName}): ${highScore}`;
+    }
+
+    // Skins (smaller bounding boxes, but we’ll use bigger font in draw)
+    const unicornSkins = [
+      '<span class="flip-emoji">🦄</span>',
+      '<span class="flip-emoji">🦓</span>',
+      '<span class="flip-emoji">🐎</span>',
+      '<span class="flip-emoji">🦌</span>',
+      '<span class="flip-emoji">🐑</span>'
+    ];
+    let currentSkinIndex = 0;
+
+    let level = 1;
+    let score = 0;
+    let carrotComboCount = 0;
+    let frameCount = 0;
+    let gameSpeed = 1;
+    let elapsedTime = 0;
+
+    // The “unicorn”
+    const unicorn = {
+      x: 100,
+      y: 300,
+      width: 30,
+      height: 30,
+      skin: unicornSkins[currentSkinIndex],
+      jumpHeight: 10,
+      gravity: 0.2,
+      velocity: 0,
+      isJumping: false,
+      isOnGround: true,
+      invincible: false,
+      invincibilityTimer: 0,
+      doublePoints: false,
+      doublePointsTimer: 0,
+      slowEffect: false,
+      slowTimer: 0
+    };
+
+    let carrots = [];
+    let obstacles = [];
+    let powerUps = [];
+    let flyingEnemies = [];
+
+    // Starfield
+    let stars = [];
+    const totalStars = 50;
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < totalStars; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * (canvas.height - 100)
+        });
+      }
+    }
+
+    let fiestaActive = false;
+    fiestaButton.addEventListener('click', () => {
+      fiestaActive = !fiestaActive;
+      if (fiestaActive) {
+        document.body.style.background = 'linear-gradient(45deg, #faff00, #ff00fd)';
+      } else {
+        document.body.style.background = 'linear-gradient(180deg, #ffeaf2 0%, #ffd6e1 100%)';
+      }
+    });
+
+    // Confetti
+    function showConfetti() {
+      confettiElement.style.left = '50%';
+      confettiElement.style.top = '50%';
+      confettiElement.style.opacity = '1';
+      confettiElement.classList.remove('confetti');
+      void confettiElement.offsetWidth; // restart animation
+      confettiElement.classList.add('confetti');
+    }
+
+    // Background
+    function drawSunsetBackground() {
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#662b2b');
+      gradient.addColorStop(0.5, '#803232');
+      gradient.addColorStop(1, '#a34b4f');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#fff';
+      stars.forEach(star => {
+        star.x -= 0.1 * gameSpeed;
+        if (star.x < 0) {
+          star.x = canvas.width + Math.random() * 50;
+          star.y = Math.random() * (canvas.height - 100);
+        }
+        ctx.fillRect(star.x, star.y, 2, 2);
+      });
+
+      // Ground
+      ctx.fillStyle = '#5d8b4a';
+      // We'll just define 40 px tall ground at the bottom
+      ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+    }
+
+    function updateLevel() {
+      level = Math.floor(score / 500) + 1;
+      levelDisplay.textContent = 'Nivel: ' + level;
+    }
+
+    function drawUnicorn() {
+      // We'll draw at a bigger font so it’s sharper
+      ctx.save();
+      ctx.font = '28px Arial'; 
+      ctx.scale(-1, 1);
+      ctx.translate(-unicorn.x * 2 - unicorn.width, 0);
+      // Remove HTML tags from the skin for fillText
+      const emoji = unicorn.skin.replace(/<[^>]*>/g, '');
+      ctx.fillText(emoji, unicorn.x, unicorn.y);
+      ctx.restore();
+    }
+
+    function drawCarrots() {
+      ctx.font = '24px Arial';
+      carrots.forEach(c => {
+        ctx.fillText('🥕', c.x, c.y);
+      });
+    }
+
+    function drawObstacles() {
+      ctx.font = '28px Arial';
+      obstacles.forEach(o => {
+        ctx.fillText(o.emoji, o.x, o.y);
+      });
+    }
+
+    function drawFlyingEnemies() {
+      ctx.font = '28px Arial';
+      flyingEnemies.forEach(f => {
+        ctx.fillText(f.emoji, f.x, f.y);
+      });
+    }
+
+    function drawPowerUps() {
+      ctx.font = '26px Arial';
+      powerUps.forEach(p => {
+        ctx.fillText(p.emoji, p.x, p.y);
+      });
+    }
+
+    function updateUnicorn() {
+      if (unicorn.isJumping && unicorn.isOnGround) {
+        if (!isMuted) jumpSound.play();
+        unicorn.velocity = -unicorn.jumpHeight;
+        unicorn.isOnGround = false;
+        unicorn.isJumping = false;
+      }
+
+      unicorn.velocity += unicorn.gravity * gameSpeed;
+      unicorn.y += unicorn.velocity;
+
+      // floor
+      if (unicorn.y >= canvas.height - 40) {
+        unicorn.y = canvas.height - 40;
+        unicorn.velocity = 0;
+        unicorn.isOnGround = true;
+      }
+      // ceiling
+      if (unicorn.y < 0) {
+        unicorn.y = 0;
+        unicorn.velocity = 0;
+      }
+
+      // Timers
+      if (unicorn.invincible) {
+        unicorn.invincibilityTimer--;
+        if (unicorn.invincibilityTimer <= 0) {
+          unicorn.invincible = false;
+        }
+      }
+      if (unicorn.doublePoints) {
+        unicorn.doublePointsTimer--;
+        if (unicorn.doublePointsTimer <= 0) {
+          unicorn.doublePoints = false;
+        }
+      }
+      if (unicorn.slowEffect) {
+        unicorn.slowTimer--;
+        if (unicorn.slowTimer <= 0) {
+          unicorn.slowEffect = false;
+          gameSpeed = 1;
+        }
+      }
+    }
+
+    // Carrots
+    function updateCarrots() {
+      if (frameCount % Math.floor(120 / gameSpeed) === 0) {
+        carrots.push({
+          x: canvas.width,
+          y: Math.random() * (canvas.height - 100),
+          width: 20,
+          height: 20
+        });
+      }
+      carrots.forEach(c => c.x -= 3 * gameSpeed);
+      carrots = carrots.filter(c => c.x > -30);
+    }
+
+    // Obstacles
+    const obstacleEmojis = ['🌵','🐉'];
+    function updateObstacles() {
+      const obstacleInterval = Math.max(300 - (level * 20), 180);
+      if (frameCount % Math.floor(obstacleInterval / gameSpeed) === 0) {
+        const randomObs = obstacleEmojis[Math.floor(Math.random() * obstacleEmojis.length)];
+        obstacles.push({
+          x: canvas.width,
+          y: canvas.height - 40,
+          width: 30,
+          height: 30,
+          emoji: randomObs
+        });
+      }
+      obstacles.forEach(o => o.x -= (3 + (level - 1)) * gameSpeed);
+      obstacles = obstacles.filter(o => o.x > -40);
+    }
+
+    // Power-ups
+    function updatePowerUps() {
+      if (frameCount % Math.floor(350 / gameSpeed) === 0 && frameCount > 0) {
+        const rand = Math.random();
+        let typeEmoji = '⭐';
+        if (rand < 0.33) typeEmoji = '⭐';
+        else if (rand < 0.66) typeEmoji = '🐌';
+        else typeEmoji = '🔥';
+
+        powerUps.push({
+          x: canvas.width,
+          y: 50 + Math.random() * (canvas.height - 150),
+          width: 25,
+          height: 25,
+          emoji: typeEmoji
+        });
+      }
+      powerUps.forEach(p => p.x -= 4 * gameSpeed);
+      powerUps = powerUps.filter(p => p.x > -35);
+    }
+
+    // Flying enemies
+    const flyingEnemiesEmojis = ['🦅','🐲'];
+    function updateFlyingEnemies() {
+      if (level > 1) {
+        const flyInterval = Math.max(400 - (level * 20), 250);
+        if (frameCount % Math.floor(flyInterval / gameSpeed) === 0 && frameCount > 0) {
+          const randomFly = flyingEnemiesEmojis[Math.floor(Math.random() * flyingEnemiesEmojis.length)];
+          flyingEnemies.push({
+            x: canvas.width,
+            y: 60 + Math.random() * (canvas.height - 200),
+            width: 30,
+            height: 30,
+            emoji: randomFly
+          });
+        }
+      }
+      flyingEnemies.forEach(f => f.x -= 3 * gameSpeed);
+      flyingEnemies = flyingEnemies.filter(f => f.x > -40);
+    }
+
+    // Collisions
+    function checkCollisions() {
+      // Carrots
+      carrots.forEach((c, index) => {
+        if (
+          unicorn.x < c.x + c.width &&
+          unicorn.x + unicorn.width > c.x &&
+          unicorn.y < c.y + c.height &&
+          unicorn.y + unicorn.height > c.y
+        ) {
+          carrots.splice(index, 1);
+          carrotComboCount++;
+          let points = 10;
+          if (carrotComboCount % 5 === 0) points = 20;
+          if (unicorn.doublePoints) points *= 2;
+          score += points;
+          if (!isMuted) carrotSound.play();
+          scoreDisplay.textContent = 'Puntuación: ' + score;
+          carrotComboDisplay.textContent = 'Combo Zanahorias: ' + carrotComboCount;
+          updateLevel();
+        }
+      });
+
+      // Power-ups
+      powerUps.forEach((p, index) => {
+        if (
+          unicorn.x < p.x + p.width &&
+          unicorn.x + unicorn.width > p.x &&
+          unicorn.y < p.y + p.height &&
+          unicorn.y + unicorn.height > p.y
+        ) {
+          const picked = p.emoji;
+          powerUps.splice(index, 1);
+          showConfetti();
+
+          if (picked === '⭐') {
+            unicorn.invincible = true;
+            unicorn.invincibilityTimer = 300; // 5s
+            if (!isMuted) starSound.play();
+          } else if (picked === '🐌') {
+            unicorn.slowEffect = true;
+            unicorn.slowTimer = 480; // ~8s
+            gameSpeed = 0.5;
+            if (!isMuted) snailSound.play();
+          } else if (picked === '🔥') {
+            unicorn.doublePoints = true;
+            unicorn.doublePointsTimer = 300; // ~5s
+            if (!isMuted) flameSound.play();
+          }
+        }
+      });
+
+      // Obstacles
+      obstacles.forEach(o => {
+        if (!unicorn.invincible) {
+          if (
+            unicorn.x < o.x + o.width &&
+            unicorn.x + unicorn.width > o.x &&
+            unicorn.y < o.y + o.height &&
+            unicorn.y + unicorn.height > o.y
+          ) {
+            if (!isMuted) crashSound.play();
+            endGame();
+          }
+        }
+      });
+
+      // Flying enemies
+      flyingEnemies.forEach(f => {
+        if (!unicorn.invincible) {
+          if (
+            unicorn.x < f.x + f.width &&
+            unicorn.x + unicorn.width > f.x &&
+            unicorn.y < f.y + f.height &&
+            unicorn.y + unicorn.height > f.y
+          ) {
+            if (!isMuted) crashSound.play();
+            endGame();
+          }
+        }
+      });
+    }
+
+    function endGame() {
+      gameRunning = false;
+      if (score > highScore) {
+        highScore = score;
+        highScoreDisplay.textContent = `Máx. Puntaje (${playerName}): ${highScore}`;
+        localStorage.setItem(
+          'unicornHighScore',
+          JSON.stringify({ score: highScore, name: playerName })
+        );
+      }
+      const jugarDeNuevo = confirm(
+        `¡Oh no! Perdiste. Puntuación final: ${score}\n` +
+        `Tiempo total: ${Math.floor(elapsedTime)} s\n\n` +
+        `¿Quieres jugar de nuevo?`
+      );
+      if (jugarDeNuevo) {
+        resetGame();
+        startGame();
+      }
+    }
+
+    function resetGame() {
+      // Setup the canvas again in case user changed orientation
+      setupCanvas();
+
+      unicorn.x = 100;
+      unicorn.y = 300;
+      unicorn.velocity = 0;
+      unicorn.isOnGround = true;
+      unicorn.invincible = false;
+      unicorn.invincibilityTimer = 0;
+      unicorn.doublePoints = false;
+      unicorn.doublePointsTimer = 0;
+      unicorn.slowEffect = false;
+      unicorn.slowTimer = 0;
+
+      carrots = [];
+      obstacles = [];
+      powerUps = [];
+      flyingEnemies = [];
+
+      score = 0;
+      level = 1;
+      carrotComboCount = 0;
+      frameCount = 0;
+      elapsedTime = 0;
+      gameSpeed = 1;
+
+      scoreDisplay.textContent = 'Puntuación: 0';
+      levelDisplay.textContent = 'Nivel: 1';
+      carrotComboDisplay.textContent = 'Combo Zanahorias: 0';
+      timeElapsedDisplay.textContent = 'Tiempo: 0 s';
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      frameCount++;
+
+      elapsedTime += 1/60;
+      timeElapsedDisplay.textContent = 'Tiempo: ' + Math.floor(elapsedTime) + ' s';
+
+      drawSunsetBackground();
+      drawUnicorn();
+      drawCarrots();
+      drawObstacles();
+      drawFlyingEnemies();
+      drawPowerUps();
+
+      updateUnicorn();
+      updateCarrots();
+      updateObstacles();
+      updateFlyingEnemies();
+      updatePowerUps();
+      checkCollisions();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      gameRunning = true;
+      initStars();
+      gameLoop();
+      if (!isMuted) {
+        music.play().catch(() => {});
+      }
+    }
+
+    // Controls
+    document.addEventListener('keydown', e => {
+      if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (unicorn.isOnGround) {
+          unicorn.isJumping = true;
+        }
+      } else if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+      }
+    });
+
+    // Buttons
+    startButton.addEventListener('click', () => {
+      if (!playerName || playerName === 'Player') {
+        playerName = prompt('Escribe tu nombre:');
+        if (!playerName) playerName = 'Player';
+      }
+      resetGame();
+      startGame();
+    });
+
+    changeCharacterButton.addEventListener('click', () => {
+      currentSkinIndex = (currentSkinIndex + 1) % unicornSkins.length;
+      unicorn.skin = unicornSkins[currentSkinIndex];
+    });
+
+    muteButton.addEventListener('click', () => {
+      isMuted = !isMuted;
+      [
+        music,
+        jumpSound,
+        carrotSound,
+        crashSound,
+        starSound,
+        snailSound,
+        flameSound
+      ].forEach(snd => {
+        snd.muted = isMuted;
+      });
+      if (!isMuted) {
+        music.play().catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>
