@@ -2,12 +2,12 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <!-- Helps with mobile responsiveness -->
+  <!-- Ayuda con la responsividad en móviles -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <title>Las Aventuras Mágicas de Sophie y Alana (Móvil, HiDPI)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Body & background */
+    /* Cuerpo y fondo */
     html, body {
       margin: 0;
       padding: 0;
@@ -19,12 +19,17 @@
       transition: background 0.5s ease;
     }
 
-    /* We'll keep the canvas responsive with a fixed ratio */
+    /* Contenedor del juego para responsividad */
     #gameContainer {
       width: 100%;
       max-width: 700px;
       margin: 0 auto;
       position: relative;
+      /* Ajuste de altura para evitar corte en móviles */
+      height: 70vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
     #gameCanvas {
@@ -32,18 +37,17 @@
       border: 3px solid #ff8ad8;
       border-radius: 15px;
       width: 100%;
-      height: auto;        
-      max-height: 350px;
+      height: 100%;        
       background: transparent;
     }
 
-    /* Flip emojis horizontally */
+    /* Emojis volteados horizontalmente */
     .flip-emoji {
       transform: scaleX(-1);
       display: inline-block;
     }
 
-    /* Rainbow title */
+    /* Título arcoíris */
     .rainbow-text {
       background: linear-gradient(
         90deg,
@@ -62,15 +66,18 @@
       display: inline-block;
     }
 
-    /* Buttons container */
+    /* Contenedor de botones */
     #buttons {
       text-align: center;
       margin-top: 1rem;
+      flex-wrap: wrap;
     }
-    /* Cool glow on hover */
+    /* Glow en hover */
     #startButton:hover,
     #pauseButton:hover,
-    #nightModeButton:hover {
+    #nightModeButton:hover,
+    #jumpButton:hover,
+    #tapToJumpButton:hover {
       animation: buttonGlow 1s infinite alternate;
     }
     @keyframes buttonGlow {
@@ -78,7 +85,7 @@
       to   { box-shadow: 0 0 20px #ff6bf0; }
     }
 
-    /* Smaller font for instructions */
+    /* Fuente más pequeña para instrucciones */
     #info-section {
       margin: 0 auto;
       max-width: 500px;
@@ -95,7 +102,7 @@
       margin-top: 30px;
     }
 
-    /* KPI board centered */
+    /* KPI board centrado */
     #kpiBoard {
       text-align: center;
       margin-top: 10px;
@@ -106,7 +113,7 @@
       color: #ff0080;
     }
 
-    /* Confetti animation for fun */
+    /* Animación de confeti */
     .confetti {
       position: fixed;
       left: 50%;
@@ -127,7 +134,7 @@
       }
     }
 
-    /* Pause overlay */
+    /* Overlay de pausa */
     #pauseOverlay {
       display: none;
       position: absolute;
@@ -144,6 +151,29 @@
       font-size: 2rem;
       color: #ff0080;
       text-align: center;
+    }
+
+    /* Nuevo: Botón para saltar en móvil */
+    #tapToJumpButton {
+      display: none; /* Solo visible en móviles */
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background-color: rgba(255, 0, 128, 0.8);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    /* Mostrar el botón de salto en pantallas pequeñas */
+    @media (max-width: 768px) {
+      #tapToJumpButton {
+        display: block;
+      }
     }
   </style>
 </head>
@@ -184,17 +214,19 @@
     <p id="carrotCombo">Combo Zanahorias: 0</p>
   </div>
 
-  <!-- Canvas + pause overlay -->
+  <!-- Canvas + overlay de pausa -->
   <div id="gameContainer">
     <canvas id="gameCanvas"></canvas>
     <div id="pauseOverlay" class="flex">
       <h2>¡Pausado!</h2>
     </div>
+    <!-- Nuevo: Botón para saltar en móvil -->
+    <button id="tapToJumpButton">🦄 Saltar</button>
   </div>
 
   <div id="info-section" class="m-4">
     <h2 class="text-xl font-bold">Instrucciones</h2>
-    <p>1. Presiona la flecha hacia arriba para saltar <em>(o desliza hacia arriba en tu móvil)</em>. Ahora tienes **doble salto** si presionas de nuevo en el aire.</p>
+    <p>1. Presiona la flecha hacia arriba para saltar <em>(o toca el botón "Saltar" en tu móvil)</em>. Ahora tienes **doble salto** si presionas de nuevo en el aire.</p>
     <p>2. Recoge zanahorias para ganar puntos.</p>
     <p>3. Evita los cactus, dragones y enemigos voladores (a menos que estés invencible).</p>
     <p>4. Power-ups:</p>
@@ -206,6 +238,13 @@
       <li><strong>❤️ Corazón</strong> → Suma una vida extra</li>
     </ul>
     <p><em>¡Diviértete y compite por la mejor puntuación!</em></p>
+
+    <h2 class="text-xl font-bold mt-4">Leyenda / Power-Ups</h2>
+    <p><strong>Zanahoria (🥕):</strong> +10 puntos (cada 5ta seguida = +20)</p>
+    <p><strong>Estrella (⭐):</strong> Invencibilidad 5s</p>
+    <p><strong>Caracol (🐌):</strong> Ralentiza 8s</p>
+    <p><strong>Llama (🔥):</strong> Doble puntos 5s</p>
+    <p><strong>Corazón (❤️):</strong> Suma una vida extra</p>
   </div>
 
   <div id="confetti" class="confetti">✨</div>
@@ -214,7 +253,7 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // We'll set a higher internal resolution if devicePixelRatio > 1
+    // Configuración del canvas
     function setupCanvas() {
       const desiredWidth = 800;
       const desiredHeight = 400;
@@ -223,16 +262,16 @@
       canvas.height = desiredHeight * dpr;
       ctx.scale(dpr, dpr);
     }
-    setupCanvas();  // Call once at start
+    setupCanvas();  // Llamar una vez al inicio
 
-    // DOM elements
+    // Elementos del DOM
     const startButton = document.getElementById('startButton');
     const changeCharacterButton = document.getElementById('changeCharacterButton');
     const muteButton = document.getElementById('muteButton');
     const fiestaButton = document.getElementById('fiestaButton');
     const pauseButton = document.getElementById('pauseButton');
-    const pauseOverlay = document.getElementById('pauseOverlay');
     const nightModeButton = document.getElementById('nightModeButton');
+    const tapToJumpButton = document.getElementById('tapToJumpButton');
 
     const scoreDisplay = document.getElementById('score');
     const levelDisplay = document.getElementById('levelDisplay');
@@ -249,16 +288,17 @@
     const starSound = new Audio('https://actions.google.com/sounds/v1/cartoon/metal_bell_ting.ogg');
     const snailSound = new Audio('https://actions.google.com/sounds/v1/cartoon/woosh_fadeout.ogg');
     const flameSound = new Audio('https://actions.google.com/sounds/v1/cartoon/descending_whistle.ogg');
+    const heartSound = new Audio('https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg'); // Nuevo sonido para corazón
     music.loop = true;
 
     let isMuted = false;
     let gameRunning = false;
     let isPaused = false;
 
-    // Cancel animation reference
+    // Referencia para cancelar la animación
     let animationFrameId;
 
-    // Load saved data
+    // Cargar datos guardados
     let savedData = localStorage.getItem('unicornHighScore');
     let storedHighScore = 0;
     let storedPlayerName = 'Player';
@@ -288,16 +328,16 @@
     ];
     let currentSkinIndex = 0;
 
-    // Game variables
+    // Variables del juego
     let level = 1;
     let score = 0;
     let carrotComboCount = 0;
     let frameCount = 0;
     let gameSpeed = 1;
     let elapsedTime = 0;
-    let lives = 1; // Nuevo: manejamos vidas
+    let lives = 1; // Vidas
 
-    // Unicorn data
+    // Datos del unicornio
     const unicorn = {
       x: 100,
       y: 300,
@@ -305,11 +345,11 @@
       height: 30,
       skin: unicornSkins[currentSkinIndex],
       jumpHeight: 10,
-      gravity: 0.25,           // Aumenté ligeramente la gravedad para un salto más rápido
+      gravity: 0.25, // Aumentada para un salto más rápido
       velocity: 0,
       isJumping: false,
-      jumpCount: 0,           // Nuevo: para manejar doble salto
-      maxJumps: 2,            // Nuevo: se permiten 2 saltos
+      jumpCount: 0, // Para doble salto
+      maxJumps: 2,  // Permitidos 2 saltos
       isOnGround: true,
       invincible: false,
       invincibilityTimer: 0,
@@ -324,7 +364,7 @@
     let powerUps = [];
     let flyingEnemies = [];
     let stars = [];
-    const totalStars = 50;
+    const totalStars = 30; // Reducidos para mejorar rendimiento
 
     function initStars() {
       stars = [];
@@ -345,7 +385,7 @@
       if (fiestaActive) {
         document.body.style.background = 'linear-gradient(45deg, #faff00, #ff00fd)';
       } else {
-        // si nightMode está activo, no vuelvo al gradiente rosa
+        // Si nightMode está activo, no volver al gradiente rosa
         if (nightMode) {
           document.body.style.background = 'linear-gradient(180deg, #333 0%, #111 100%)';
         } else {
@@ -373,8 +413,8 @@
       confettiElement.classList.add('confetti');
     }
 
-    // Background
-    function drawSunsetBackground() {
+    // Fondo
+    function drawBackground() {
       let gradient;
       if (nightMode) {
         // Fondo oscuro
@@ -401,7 +441,7 @@
         ctx.fillRect(star.x, star.y, 2, 2);
       });
 
-      // Ground
+      // Suelo
       ctx.fillStyle = nightMode ? '#222' : '#5d8b4a';
       ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
     }
@@ -449,28 +489,60 @@
       });
     }
 
-    // Actualizamos la física del unicornio independientemente de gameSpeed
+    // Partículas al saltar (Nueva Mejora)
+    let particles = [];
+    function drawParticles() {
+      ctx.fillStyle = 'rgba(255, 200, 200, 0.5)';
+      particles.forEach((p, index) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.size *= 0.95;
+        if (p.size < 0.5) {
+          particles.splice(index, 1);
+        }
+      });
+    }
+
+    function createParticles(x, y) {
+      for (let i = 0; i < 10; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 2,
+          vy: (Math.random() - 1) * 2,
+          size: Math.random() * 3 + 2,
+          gravity: 0.05
+        });
+      }
+    }
+
+    // Actualizar física del unicornio
     function updateUnicorn() {
-      // Verificamos si el unicornio quiere saltar
+      // Verificar si el unicornio quiere saltar
       if (unicorn.isJumping) {
         if (!isMuted) jumpSound.play();
         unicorn.velocity = -unicorn.jumpHeight; 
         unicorn.isOnGround = false;
         unicorn.isJumping = false;
+        createParticles(unicorn.x + unicorn.width / 2, unicorn.y + unicorn.height);
       }
 
-      // Aplicamos gravedad SIEMPRE sin multiplicar por gameSpeed
+      // Aplicar gravedad siempre sin multiplicar por gameSpeed
       unicorn.velocity += unicorn.gravity;
       unicorn.y += unicorn.velocity;
 
-      // Floor
+      // Suelo
       if (unicorn.y >= canvas.height - 40) {
         unicorn.y = canvas.height - 40;
         unicorn.velocity = 0;
         unicorn.isOnGround = true;
-        unicorn.jumpCount = 0; // Reseteamos la cantidad de saltos
+        unicorn.jumpCount = 0; // Resetear saltos
       }
-      // Ceiling
+      // Techo
       if (unicorn.y < 0) {
         unicorn.y = 0;
         unicorn.velocity = 0;
@@ -512,7 +584,7 @@
       carrots = carrots.filter(c => c.x > -30);
     }
 
-    // Obstacles
+    // Obstáculos
     const obstacleEmojis = ['🌵','🐉'];
     function updateObstacles() {
       const obstacleInterval = Math.max(300 - (level * 20), 150);
@@ -538,7 +610,7 @@
         if (rand < 0.25) typeEmoji = '⭐';
         else if (rand < 0.5) typeEmoji = '🐌';
         else if (rand < 0.75) typeEmoji = '🔥';
-        else typeEmoji = '❤️'; // El nuevo corazón
+        else typeEmoji = '❤️'; // Nuevo corazón
 
         powerUps.push({
           x: canvas.width,
@@ -552,7 +624,7 @@
       powerUps = powerUps.filter(p => p.x > -35);
     }
 
-    // Flying enemies
+    // Enemigos voladores
     const flyingEnemiesEmojis = ['🦅','🐲'];
     function updateFlyingEnemies() {
       if (level > 1) {
@@ -621,12 +693,13 @@
             if (!isMuted) flameSound.play();
           } else if (picked === '❤️') {
             lives++;
+            if (!isMuted) heartSound.play();
             alert('¡Conseguiste una vida extra!');
           }
         }
       });
 
-      // Obstacles
+      // Obstáculos
       obstacles.forEach(o => {
         if (!unicorn.invincible) {
           if (
@@ -641,7 +714,7 @@
         }
       });
 
-      // Flying enemies
+      // Enemigos voladores
       flyingEnemies.forEach(f => {
         if (!unicorn.invincible) {
           if (
@@ -657,13 +730,13 @@
       });
     }
 
-    // Nueva función para manejar daño (vidas)
+    // Manejar daño (vidas)
     function takeDamage() {
       lives--;
       if (lives <= 0) {
         endGame();
       } else {
-        // Si aún quedan vidas, solo "resetea" un poco al unicornio
+        // Si quedan vidas, resetea un poco al unicornio
         alert('¡Perdiste una vida! Te quedan ' + lives);
         unicorn.invincible = true; 
         unicorn.invincibilityTimer = 60; // 1 seg de invulnerabilidad
@@ -708,12 +781,13 @@
       unicorn.slowEffect = false;
       unicorn.slowTimer = 0;
       unicorn.jumpCount = 0;
-      lives = 1; // Reiniciamos vidas
+      lives = 1; // Reiniciar vidas
 
       carrots = [];
       obstacles = [];
       powerUps = [];
       flyingEnemies = [];
+      particles = []; // Limpiar partículas
 
       score = 0;
       level = 1;
@@ -734,12 +808,13 @@
       elapsedTime += 1/60;
       timeElapsedDisplay.textContent = 'Tiempo: ' + Math.floor(elapsedTime) + ' s';
 
-      drawSunsetBackground();
+      drawBackground();
       drawUnicorn();
       drawCarrots();
       drawObstacles();
       drawFlyingEnemies();
       drawPowerUps();
+      drawParticles(); // Dibujar partículas
 
       updateUnicorn();
       updateCarrots();
@@ -762,17 +837,17 @@
       }
     }
 
-    // Pause / Unpause
+    // Pausar / Reanudar
     function pauseGame() {
       if (!gameRunning) return;
       isPaused = !isPaused;
       pauseOverlay.style.display = isPaused ? 'flex' : 'none';
       if (!isPaused) {
-        requestAnimationFrame(gameLoop);
+        animationFrameId = requestAnimationFrame(gameLoop);
       }
     }
 
-    // Desktop controls
+    // Controles de teclado
     document.addEventListener('keydown', e => {
       if ((e.code === 'ArrowUp' || e.code === 'Space') && gameRunning) {
         e.preventDefault();
@@ -784,30 +859,32 @@
       }
     });
 
-    // Mobile "swipe up"
-    let touchStartY = 0;
-    let touchEndY = 0;
-
-    document.addEventListener('touchstart', e => {
-      touchStartY = e.changedTouches[0].screenY;
-    }, false);
-
-    document.addEventListener('touchend', e => {
-      touchEndY = e.changedTouches[0].screenY;
-      handleSwipe();
-    }, false);
-
-    function handleSwipe() {
-      const swipeDistance = touchStartY - touchEndY;
-      if (swipeDistance > 50 && gameRunning) {
-        if (unicorn.jumpCount < unicorn.maxJumps) {
-          unicorn.isJumping = true;
-          unicorn.jumpCount++;
-        }
+    // Controles de toque en móvil
+    // Añadir salto al tocar el botón en móvil
+    tapToJumpButton.addEventListener('click', () => {
+      if (gameRunning && unicorn.jumpCount < unicorn.maxJumps) {
+        unicorn.isJumping = true;
+        unicorn.jumpCount++;
       }
-    }
+    });
 
-    // Buttons
+    // Opcional: También permitir tocar cualquier parte del canvas para saltar
+    canvas.addEventListener('click', () => {
+      if (gameRunning && unicorn.jumpCount < unicorn.maxJumps) {
+        unicorn.isJumping = true;
+        unicorn.jumpCount++;
+      }
+    });
+
+    // Alternativamente, agregar listener de toque en el contenedor del juego
+    document.getElementById('gameContainer').addEventListener('touchstart', () => {
+      if (gameRunning && unicorn.jumpCount < unicorn.maxJumps) {
+        unicorn.isJumping = true;
+        unicorn.jumpCount++;
+      }
+    });
+
+    // Botones
     startButton.addEventListener('click', () => {
       if (!playerName || playerName === 'Player') {
         playerName = prompt('Escribe tu nombre:');
@@ -831,7 +908,8 @@
         crashSound,
         starSound,
         snailSound,
-        flameSound
+        flameSound,
+        heartSound // Nuevo sonido para corazón
       ].forEach(snd => {
         snd.muted = isMuted;
       });
