@@ -16,18 +16,23 @@
       background-size: cover;
       font-family: 'Comic Sans MS', sans-serif;
       overflow-x: hidden;
+      transition: background 0.5s ease;
     }
 
-    /* We set a “logical” size in CSS, but use higher resolution in JS */
+    /* We'll keep the canvas responsive with a fixed ratio */
+    #gameContainer {
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+      position: relative;
+    }
+
     #gameCanvas {
       display: block;
-      margin: 0 auto;
       border: 3px solid #ff8ad8;
       border-radius: 15px;
-      /* We'll give it a nice size on mobile, but it won't look blurry if devicePixelRatio > 1 */
-      width: 90vw;       
-      max-width: 700px;  
-      height: 45vh;      
+      width: 100%;
+      height: auto;        
       max-height: 350px;
       background: transparent;
     }
@@ -63,7 +68,9 @@
       margin-top: 1rem;
     }
     /* Cool glow on hover */
-    #startButton:hover {
+    #startButton:hover,
+    #pauseButton:hover,
+    #nightModeButton:hover {
       animation: buttonGlow 1s infinite alternate;
     }
     @keyframes buttonGlow {
@@ -119,6 +126,25 @@
         transform: translate(-50%, -150%) scale(2);
       }
     }
+
+    /* Pause overlay */
+    #pauseOverlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 224, 244, 0.7);
+      justify-content: center;
+      align-items: center;
+      border-radius: 15px;
+    }
+    #pauseOverlay h2 {
+      font-size: 2rem;
+      color: #ff0080;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -140,6 +166,13 @@
       <button id="fiestaButton" class="mt-4 px-6 py-2 bg-yellow-400 hover:bg-yellow-500 text-white font-bold rounded-full">
         Fiesta Mode
       </button>
+      <button id="pauseButton" class="mt-4 px-6 py-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-full">
+        Pausar
+      </button>
+      <!-- Nuevo botón para modo nocturno -->
+      <button id="nightModeButton" class="mt-4 px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-full">
+        Modo Nocturno
+      </button>
     </div>
     <p id="score" class="mt-4 text-lg text-pink-800">Puntuación: 0</p>
     <p id="levelDisplay" class="mt-2 text-lg text-pink-800">Nivel: 1</p>
@@ -151,11 +184,17 @@
     <p id="carrotCombo">Combo Zanahorias: 0</p>
   </div>
 
-  <canvas id="gameCanvas"></canvas>
+  <!-- Canvas + pause overlay -->
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="pauseOverlay" class="flex">
+      <h2>¡Pausado!</h2>
+    </div>
+  </div>
 
   <div id="info-section" class="m-4">
     <h2 class="text-xl font-bold">Instrucciones</h2>
-    <p>1. Presiona la flecha hacia arriba para saltar.</p>
+    <p>1. Presiona la flecha hacia arriba para saltar <em>(o desliza hacia arriba en tu móvil)</em>. Ahora tienes **doble salto** si presionas de nuevo en el aire.</p>
     <p>2. Recoge zanahorias para ganar puntos.</p>
     <p>3. Evita los cactus, dragones y enemigos voladores (a menos que estés invencible).</p>
     <p>4. Power-ups:</p>
@@ -163,14 +202,10 @@
       <li><strong>⭐ Estrella</strong> → Invencibilidad (5s)</li>
       <li><strong>🐌 Caracol</strong> → Ralentiza el juego (8s)</li>
       <li><strong>🔥 Llama</strong> → Doble de puntos (5s)</li>
+      <!-- Nuevo power-up -->
+      <li><strong>❤️ Corazón</strong> → Suma una vida extra</li>
     </ul>
     <p><em>¡Diviértete y compite por la mejor puntuación!</em></p>
-
-    <h2 class="text-xl font-bold mt-4">Leyenda / Power-Ups</h2>
-    <p><strong>Zanahoria (🥕):</strong> +10 puntos (cada 5ta seguida = +20)</p>
-    <p><strong>Estrella (⭐):</strong> Invencibilidad 5s</p>
-    <p><strong>Caracol (🐌):</strong> Ralentiza 8s</p>
-    <p><strong>Llama (🔥):</strong> Doble puntos 5s</p>
   </div>
 
   <div id="confetti" class="confetti">✨</div>
@@ -181,35 +216,29 @@
 
     // We'll set a higher internal resolution if devicePixelRatio > 1
     function setupCanvas() {
-      // Desired “logical” size
       const desiredWidth = 800;
       const desiredHeight = 400;
-
-      // Factor in the device pixel ratio
       const dpr = window.devicePixelRatio || 1;
-
       canvas.width = desiredWidth * dpr;
       canvas.height = desiredHeight * dpr;
-
-      // Then scale the context to match
       ctx.scale(dpr, dpr);
     }
+    setupCanvas();  // Call once at start
 
-    // Call it right away so canvas is hi-res
-    setupCanvas();
-
+    // DOM elements
     const startButton = document.getElementById('startButton');
     const changeCharacterButton = document.getElementById('changeCharacterButton');
     const muteButton = document.getElementById('muteButton');
     const fiestaButton = document.getElementById('fiestaButton');
+    const pauseButton = document.getElementById('pauseButton');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const nightModeButton = document.getElementById('nightModeButton');
 
     const scoreDisplay = document.getElementById('score');
     const levelDisplay = document.getElementById('levelDisplay');
     const highScoreDisplay = document.getElementById('highScore');
-
     const timeElapsedDisplay = document.getElementById('timeElapsed');
     const carrotComboDisplay = document.getElementById('carrotCombo');
-
     const confettiElement = document.getElementById('confetti');
 
     // Audio
@@ -224,7 +253,12 @@
 
     let isMuted = false;
     let gameRunning = false;
+    let isPaused = false;
 
+    // Cancel animation reference
+    let animationFrameId;
+
+    // Load saved data
     let savedData = localStorage.getItem('unicornHighScore');
     let storedHighScore = 0;
     let storedPlayerName = 'Player';
@@ -244,7 +278,7 @@
       highScoreDisplay.textContent = `Máx. Puntaje (${playerName}): ${highScore}`;
     }
 
-    // Skins (smaller bounding boxes, but we’ll use bigger font in draw)
+    // Skins
     const unicornSkins = [
       '<span class="flip-emoji">🦄</span>',
       '<span class="flip-emoji">🦓</span>',
@@ -254,14 +288,16 @@
     ];
     let currentSkinIndex = 0;
 
+    // Game variables
     let level = 1;
     let score = 0;
     let carrotComboCount = 0;
     let frameCount = 0;
     let gameSpeed = 1;
     let elapsedTime = 0;
+    let lives = 1; // Nuevo: manejamos vidas
 
-    // The “unicorn”
+    // Unicorn data
     const unicorn = {
       x: 100,
       y: 300,
@@ -269,9 +305,11 @@
       height: 30,
       skin: unicornSkins[currentSkinIndex],
       jumpHeight: 10,
-      gravity: 0.2,
+      gravity: 0.25,           // Aumenté ligeramente la gravedad para un salto más rápido
       velocity: 0,
       isJumping: false,
+      jumpCount: 0,           // Nuevo: para manejar doble salto
+      maxJumps: 2,            // Nuevo: se permiten 2 saltos
       isOnGround: true,
       invincible: false,
       invincibilityTimer: 0,
@@ -285,10 +323,9 @@
     let obstacles = [];
     let powerUps = [];
     let flyingEnemies = [];
-
-    // Starfield
     let stars = [];
     const totalStars = 50;
+
     function initStars() {
       stars = [];
       for (let i = 0; i < totalStars; i++) {
@@ -299,11 +336,28 @@
       }
     }
 
+    // Noche / Día
     let fiestaActive = false;
+    let nightMode = false;
+
     fiestaButton.addEventListener('click', () => {
       fiestaActive = !fiestaActive;
       if (fiestaActive) {
         document.body.style.background = 'linear-gradient(45deg, #faff00, #ff00fd)';
+      } else {
+        // si nightMode está activo, no vuelvo al gradiente rosa
+        if (nightMode) {
+          document.body.style.background = 'linear-gradient(180deg, #333 0%, #111 100%)';
+        } else {
+          document.body.style.background = 'linear-gradient(180deg, #ffeaf2 0%, #ffd6e1 100%)';
+        }
+      }
+    });
+
+    nightModeButton.addEventListener('click', () => {
+      nightMode = !nightMode;
+      if (nightMode) {
+        document.body.style.background = 'linear-gradient(180deg, #333 0%, #111 100%)';
       } else {
         document.body.style.background = 'linear-gradient(180deg, #ffeaf2 0%, #ffd6e1 100%)';
       }
@@ -315,16 +369,25 @@
       confettiElement.style.top = '50%';
       confettiElement.style.opacity = '1';
       confettiElement.classList.remove('confetti');
-      void confettiElement.offsetWidth; // restart animation
+      void confettiElement.offsetWidth; 
       confettiElement.classList.add('confetti');
     }
 
     // Background
     function drawSunsetBackground() {
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, '#662b2b');
-      gradient.addColorStop(0.5, '#803232');
-      gradient.addColorStop(1, '#a34b4f');
+      let gradient;
+      if (nightMode) {
+        // Fondo oscuro
+        gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#0e0e0e');
+        gradient.addColorStop(1, '#303030');
+      } else {
+        // Fondo atardecer
+        gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#662b2b');
+        gradient.addColorStop(0.5, '#803232');
+        gradient.addColorStop(1, '#a34b4f');
+      }
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -339,8 +402,7 @@
       });
 
       // Ground
-      ctx.fillStyle = '#5d8b4a';
-      // We'll just define 40 px tall ground at the bottom
+      ctx.fillStyle = nightMode ? '#222' : '#5d8b4a';
       ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
     }
 
@@ -350,12 +412,10 @@
     }
 
     function drawUnicorn() {
-      // We'll draw at a bigger font so it’s sharper
       ctx.save();
-      ctx.font = '28px Arial'; 
+      ctx.font = '28px Arial';
       ctx.scale(-1, 1);
       ctx.translate(-unicorn.x * 2 - unicorn.width, 0);
-      // Remove HTML tags from the skin for fillText
       const emoji = unicorn.skin.replace(/<[^>]*>/g, '');
       ctx.fillText(emoji, unicorn.x, unicorn.y);
       ctx.restore();
@@ -389,24 +449,28 @@
       });
     }
 
+    // Actualizamos la física del unicornio independientemente de gameSpeed
     function updateUnicorn() {
-      if (unicorn.isJumping && unicorn.isOnGround) {
+      // Verificamos si el unicornio quiere saltar
+      if (unicorn.isJumping) {
         if (!isMuted) jumpSound.play();
-        unicorn.velocity = -unicorn.jumpHeight;
+        unicorn.velocity = -unicorn.jumpHeight; 
         unicorn.isOnGround = false;
         unicorn.isJumping = false;
       }
 
-      unicorn.velocity += unicorn.gravity * gameSpeed;
+      // Aplicamos gravedad SIEMPRE sin multiplicar por gameSpeed
+      unicorn.velocity += unicorn.gravity;
       unicorn.y += unicorn.velocity;
 
-      // floor
+      // Floor
       if (unicorn.y >= canvas.height - 40) {
         unicorn.y = canvas.height - 40;
         unicorn.velocity = 0;
         unicorn.isOnGround = true;
+        unicorn.jumpCount = 0; // Reseteamos la cantidad de saltos
       }
-      // ceiling
+      // Ceiling
       if (unicorn.y < 0) {
         unicorn.y = 0;
         unicorn.velocity = 0;
@@ -451,7 +515,7 @@
     // Obstacles
     const obstacleEmojis = ['🌵','🐉'];
     function updateObstacles() {
-      const obstacleInterval = Math.max(300 - (level * 20), 180);
+      const obstacleInterval = Math.max(300 - (level * 20), 150);
       if (frameCount % Math.floor(obstacleInterval / gameSpeed) === 0) {
         const randomObs = obstacleEmojis[Math.floor(Math.random() * obstacleEmojis.length)];
         obstacles.push({
@@ -466,14 +530,15 @@
       obstacles = obstacles.filter(o => o.x > -40);
     }
 
-    // Power-ups
+    // Power-ups (incluyendo corazón)
     function updatePowerUps() {
       if (frameCount % Math.floor(350 / gameSpeed) === 0 && frameCount > 0) {
         const rand = Math.random();
         let typeEmoji = '⭐';
-        if (rand < 0.33) typeEmoji = '⭐';
-        else if (rand < 0.66) typeEmoji = '🐌';
-        else typeEmoji = '🔥';
+        if (rand < 0.25) typeEmoji = '⭐';
+        else if (rand < 0.5) typeEmoji = '🐌';
+        else if (rand < 0.75) typeEmoji = '🔥';
+        else typeEmoji = '❤️'; // El nuevo corazón
 
         powerUps.push({
           x: canvas.width,
@@ -507,7 +572,6 @@
       flyingEnemies = flyingEnemies.filter(f => f.x > -40);
     }
 
-    // Collisions
     function checkCollisions() {
       // Carrots
       carrots.forEach((c, index) => {
@@ -544,17 +608,20 @@
 
           if (picked === '⭐') {
             unicorn.invincible = true;
-            unicorn.invincibilityTimer = 300; // 5s
+            unicorn.invincibilityTimer = 300; 
             if (!isMuted) starSound.play();
           } else if (picked === '🐌') {
             unicorn.slowEffect = true;
-            unicorn.slowTimer = 480; // ~8s
+            unicorn.slowTimer = 480; 
             gameSpeed = 0.5;
             if (!isMuted) snailSound.play();
           } else if (picked === '🔥') {
             unicorn.doublePoints = true;
-            unicorn.doublePointsTimer = 300; // ~5s
+            unicorn.doublePointsTimer = 300;
             if (!isMuted) flameSound.play();
+          } else if (picked === '❤️') {
+            lives++;
+            alert('¡Conseguiste una vida extra!');
           }
         }
       });
@@ -569,7 +636,7 @@
             unicorn.y + unicorn.height > o.y
           ) {
             if (!isMuted) crashSound.play();
-            endGame();
+            takeDamage();
           }
         }
       });
@@ -584,14 +651,31 @@
             unicorn.y + unicorn.height > f.y
           ) {
             if (!isMuted) crashSound.play();
-            endGame();
+            takeDamage();
           }
         }
       });
     }
 
+    // Nueva función para manejar daño (vidas)
+    function takeDamage() {
+      lives--;
+      if (lives <= 0) {
+        endGame();
+      } else {
+        // Si aún quedan vidas, solo "resetea" un poco al unicornio
+        alert('¡Perdiste una vida! Te quedan ' + lives);
+        unicorn.invincible = true; 
+        unicorn.invincibilityTimer = 60; // 1 seg de invulnerabilidad
+      }
+    }
+
     function endGame() {
       gameRunning = false;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      music.pause();
+      music.currentTime = 0;
+
       if (score > highScore) {
         highScore = score;
         highScoreDisplay.textContent = `Máx. Puntaje (${playerName}): ${highScore}`;
@@ -612,9 +696,7 @@
     }
 
     function resetGame() {
-      // Setup the canvas again in case user changed orientation
-      setupCanvas();
-
+      setupCanvas(); 
       unicorn.x = 100;
       unicorn.y = 300;
       unicorn.velocity = 0;
@@ -625,6 +707,8 @@
       unicorn.doublePointsTimer = 0;
       unicorn.slowEffect = false;
       unicorn.slowTimer = 0;
+      unicorn.jumpCount = 0;
+      lives = 1; // Reiniciamos vidas
 
       carrots = [];
       obstacles = [];
@@ -645,9 +729,8 @@
     }
 
     function gameLoop() {
-      if (!gameRunning) return;
+      if (!gameRunning || isPaused) return;
       frameCount++;
-
       elapsedTime += 1/60;
       timeElapsedDisplay.textContent = 'Tiempo: ' + Math.floor(elapsedTime) + ' s';
 
@@ -665,11 +748,13 @@
       updatePowerUps();
       checkCollisions();
 
-      requestAnimationFrame(gameLoop);
+      animationFrameId = requestAnimationFrame(gameLoop);
     }
 
     function startGame() {
       gameRunning = true;
+      isPaused = false;
+      pauseOverlay.style.display = 'none';
       initStars();
       gameLoop();
       if (!isMuted) {
@@ -677,17 +762,50 @@
       }
     }
 
-    // Controls
+    // Pause / Unpause
+    function pauseGame() {
+      if (!gameRunning) return;
+      isPaused = !isPaused;
+      pauseOverlay.style.display = isPaused ? 'flex' : 'none';
+      if (!isPaused) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    // Desktop controls
     document.addEventListener('keydown', e => {
-      if (e.code === 'ArrowUp') {
+      if ((e.code === 'ArrowUp' || e.code === 'Space') && gameRunning) {
         e.preventDefault();
-        if (unicorn.isOnGround) {
+        // Doble salto: Si jumpCount < maxJumps, podemos saltar
+        if (unicorn.jumpCount < unicorn.maxJumps) {
           unicorn.isJumping = true;
+          unicorn.jumpCount++;
         }
-      } else if (e.code === 'Space' || e.code === 'Enter') {
-        e.preventDefault();
       }
     });
+
+    // Mobile "swipe up"
+    let touchStartY = 0;
+    let touchEndY = 0;
+
+    document.addEventListener('touchstart', e => {
+      touchStartY = e.changedTouches[0].screenY;
+    }, false);
+
+    document.addEventListener('touchend', e => {
+      touchEndY = e.changedTouches[0].screenY;
+      handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+      const swipeDistance = touchStartY - touchEndY;
+      if (swipeDistance > 50 && gameRunning) {
+        if (unicorn.jumpCount < unicorn.maxJumps) {
+          unicorn.isJumping = true;
+          unicorn.jumpCount++;
+        }
+      }
+    }
 
     // Buttons
     startButton.addEventListener('click', () => {
@@ -717,10 +835,14 @@
       ].forEach(snd => {
         snd.muted = isMuted;
       });
-      if (!isMuted) {
+      if (!isMuted && gameRunning && !isPaused) {
         music.play().catch(() => {});
+      } else if (isMuted) {
+        music.pause();
       }
     });
+
+    pauseButton.addEventListener('click', pauseGame);
   </script>
 </body>
 </html>
